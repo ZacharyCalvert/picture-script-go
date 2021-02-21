@@ -44,42 +44,32 @@ func main() {
 	}
 	fmt.Printf("Loaded %v meta records", len(allImages))
 
-	supportedTypes := getTypeMapping()
-
-	// make sure we map the type
-	for _, val := range allImages {
-		if _, ok := supportedTypes[strings.ToLower(val.Extensions[0])]; !ok {
-			panic(fmt.Sprintf("could not map type %v", strings.ToLower(val.Extensions[0])))
-		}
-	}
+	supportedTypes := GetTypeMapping()
+	validateAllTypesKnown(supportedTypes, allImages)
 
 	for _, meta := range allImages {
-		t := supportedTypes[strings.ToLower(meta.Extensions[0])]
+		if meta.Ignore {
+			continue
+		}
+		t, _ := supportedTypes.GetType(meta.Extensions[0])
 		earliestDate := time.Unix(0, meta.Date*int64(time.Millisecond))
 		target := fmt.Sprintf("%v/%v/%v/%v/%v", t, earliestDate.Year(), earliestDate.Month(), earliestDate.Day(), pathToFname(meta.Paths[0]))
-		fmt.Printf("Taking %v to %v\n", meta, target)
+		fmt.Printf("Copying %v to %v\n", meta.StoredAt, target)
+	}
+}
+
+func validateAllTypesKnown(types *TypeMap, allImages map[string]ImageMeta) {
+	// make sure we map the type of file
+	for _, val := range allImages {
+		if _, ok := types.GetType(val.Extensions[0]); !ok {
+			panic(fmt.Sprintf("could not map type %v", strings.ToLower(val.Extensions[0])))
+		}
 	}
 }
 
 func pathToFname(path string) string {
 	parts := strings.Split(path, "/")
 	return parts[len(parts)-1]
-}
-
-func getTypeMapping() map[string]string {
-	supportedTypes := make(map[string]string)
-	supportedTypes["m4v"] = "mov"
-	supportedTypes["mp4"] = "mov"
-	supportedTypes["png"] = "pic"
-	supportedTypes["gif"] = "pic"
-	supportedTypes["bmp"] = "pic"
-	supportedTypes["jpeg"] = "pic"
-	supportedTypes["jpg"] = "pic"
-	supportedTypes["mov"] = "mov"
-	supportedTypes["cr2"] = "mov"
-	supportedTypes["avi"] = "mov"
-	supportedTypes["mpg"] = "mov"
-	return supportedTypes
 }
 
 // ImageMeta is a single entry in our pic-man.db
@@ -90,9 +80,11 @@ type ImageMeta struct {
 	Date       int64    `yaml:"earliestDate"`
 	ReviewDone bool     `yaml:"reviewDone"`
 	Ignore     bool     `yaml:"ignore"`
+	StoredAt   string   `yaml:"storedAt"`
+	Tags       []string `yaml:"tags"`
 }
 
-func (meta ImageMeta) String() string {
+func (meta *ImageMeta) String() string {
 	t := time.Unix(0, meta.Date*int64(time.Millisecond))
 	return fmt.Sprintf("Meta{sha: %v, pathCount: %v, date: %v, reviewDone: %v, Ignore: %v}", meta.Sha, len(meta.Paths), t, meta.ReviewDone, meta.Ignore)
 }

@@ -1,3 +1,4 @@
 
 run:
-	go run main.go
+	go build
+	./img-reorg
