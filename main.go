@@ -5,9 +5,18 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"strings"
 
 	yaml "gopkg.in/yaml.v2"
 )
+
+/*
+order:
+- DONE: ingest
+- DONE: determine movie or pic
+- reorg /mov|pic/yyyy/mm/dd/<filename> -> avoid collide, copy instead of move?
+- skip ignores
+*/
 
 func main() {
 	var loadDatabase string
@@ -32,6 +41,31 @@ func main() {
 		panic(fmt.Errorf("failed to load %v: %w", loadDatabase, err))
 	}
 	fmt.Printf("Loaded %v meta records", len(allImages))
+
+	supportedTypes := getTypeMapping()
+
+	// make sure we map the type
+	for _, val := range allImages {
+		if _, ok := supportedTypes[strings.ToLower(val.Extensions[0])]; !ok {
+			panic(fmt.Sprintf("could not map type %v", strings.ToLower(val.Extensions[0])))
+		}
+	}
+}
+
+func getTypeMapping() map[string]string {
+	supportedTypes := make(map[string]string)
+	supportedTypes["m4v"] = "mov"
+	supportedTypes["mp4"] = "mov"
+	supportedTypes["png"] = "pic"
+	supportedTypes["gif"] = "pic"
+	supportedTypes["bmp"] = "pic"
+	supportedTypes["jpeg"] = "pic"
+	supportedTypes["jpg"] = "pic"
+	supportedTypes["mov"] = "mov"
+	supportedTypes["cr2"] = "mov"
+	supportedTypes["avi"] = "mov"
+	supportedTypes["mpg"] = "mov"
+	return supportedTypes
 }
 
 // ImageMeta is a single entry in our pic-man.db
