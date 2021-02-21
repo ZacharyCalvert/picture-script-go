@@ -3,8 +3,11 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
+
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -42,20 +45,69 @@ func main() {
 	if err != nil {
 		panic(fmt.Errorf("failed to load %v: %w", loadDatabase, err))
 	}
-	fmt.Printf("Loaded %v meta records", len(allImages))
+	fmt.Printf("Loaded %v meta records.\n", len(allImages))
 
 	supportedTypes := GetTypeMapping()
 	validateAllTypesKnown(supportedTypes, allImages)
+	validateAllFilesFound(allImages)
+	performCopy(supportedTypes, allImages)
+}
 
+func performCopy(types *TypeMap, allImages map[string]ImageMeta) {
 	for _, meta := range allImages {
 		if meta.Ignore {
 			continue
 		}
-		t, _ := supportedTypes.GetType(meta.Extensions[0])
+		t, _ := types.GetType(meta.Extensions[0])
 		earliestDate := time.Unix(0, meta.Date*int64(time.Millisecond))
-		target := fmt.Sprintf("%v/%v/%v/%v/%v", t, earliestDate.Year(), earliestDate.Month(), earliestDate.Day(), pathToFname(meta.Paths[0]))
-		fmt.Printf("Copying %v to %v\n", meta.StoredAt, target)
+		fromPath := meta.StoredAt
+		toPath := fmt.Sprintf("%v/%v/%v/%v/%v", t, earliestDate.Year(), earliestDate.Month(), earliestDate.Day(), pathToFname(meta.Paths[0]))
+		if _, err := os.Stat(toPath); err == nil {
+			panic(fmt.Errorf("file already exists at %v", toPath))
+		}
+		if _, err := os.Stat(fromPath); err != nil {
+			fmt.Printf("Skipping missing file %v", fromPath)
+			continue
+		}
+		copy(fromPath, toPath)
 	}
+}
+
+func copy(src, dest string) {
+	// Open original file
+	original, err := os.Open(src)
+	if err != nil {
+		panic(fmt.Errorf("failed to copy %v to %v: %w", src, dest, err))
+	}
+	defer original.Close()
+
+	destDir := filepath.Dir(dest)
+	os.MkdirAll(destDir, os.ModePerm)
+
+	new, err := os.Create(dest)
+	if err != nil {
+		panic(fmt.Errorf("could not create %v: %w", dest, err))
+	}
+	defer new.Close()
+
+	_, err = io.Copy(new, original)
+	if err != nil {
+		panic(fmt.Errorf("write bytes to %v: %w", dest, err))
+	}
+}
+
+func validateAllFilesFound(allImages map[string]ImageMeta) {
+	missing := 0
+	for _, meta := range allImages {
+		if meta.Ignore {
+			continue
+		}
+
+		if _, err := os.Stat(meta.StoredAt); err != nil {
+			missing++
+		}
+	}
+	fmt.Printf("Missing %v images\n", missing)
 }
 
 func validateAllTypesKnown(types *TypeMap, allImages map[string]ImageMeta) {
@@ -82,6 +134,7 @@ type ImageMeta struct {
 	Ignore     bool     `yaml:"ignore"`
 	StoredAt   string   `yaml:"storedAt"`
 	Tags       []string `yaml:"tags"`
+	MigratedTo string   `yaml:"migratedTo"`
 }
 
 func (meta *ImageMeta) String() string {
