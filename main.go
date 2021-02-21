@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 	"strings"
+	"time"
 
 	yaml "gopkg.in/yaml.v2"
 )
@@ -16,6 +17,7 @@ order:
 - DONE: determine movie or pic
 - reorg /mov|pic/yyyy/mm/dd/<filename> -> avoid collide, copy instead of move?
 - skip ignores
+- find folder has more than 5 images in single hour, with not yet reviewed
 */
 
 func main() {
@@ -50,6 +52,18 @@ func main() {
 			panic(fmt.Sprintf("could not map type %v", strings.ToLower(val.Extensions[0])))
 		}
 	}
+
+	for _, meta := range allImages {
+		t := supportedTypes[strings.ToLower(meta.Extensions[0])]
+		earliestDate := time.Unix(0, meta.Date*int64(time.Millisecond))
+		target := fmt.Sprintf("%v/%v/%v/%v/%v", t, earliestDate.Year(), earliestDate.Month(), earliestDate.Day(), pathToFname(meta.Paths[0]))
+		fmt.Printf("Taking %v to %v\n", meta, target)
+	}
+}
+
+func pathToFname(path string) string {
+	parts := strings.Split(path, "/")
+	return parts[len(parts)-1]
 }
 
 func getTypeMapping() map[string]string {
@@ -73,11 +87,12 @@ type ImageMeta struct {
 	Sha        string   `yaml:"sha256"`
 	Extensions []string `yaml:"extensions"`
 	Paths      []string `yaml:"paths"`
-	Date       uint64   `yaml:"earliestDate"`
-	Review     bool     `yaml:"reviewDone"`
+	Date       int64    `yaml:"earliestDate"`
+	ReviewDone bool     `yaml:"reviewDone"`
 	Ignore     bool     `yaml:"ignore"`
 }
 
 func (meta ImageMeta) String() string {
-	return fmt.Sprintf("Meta{sha: %v, pathCount: %v, date: %v, reviewDone: %v, Ignore: %v}")
+	t := time.Unix(0, meta.Date*int64(time.Millisecond))
+	return fmt.Sprintf("Meta{sha: %v, pathCount: %v, date: %v, reviewDone: %v, Ignore: %v}", meta.Sha, len(meta.Paths), t, meta.ReviewDone, meta.Ignore)
 }
